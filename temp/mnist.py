@@ -97,10 +97,10 @@ train_step =tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)
 #初始化变量（变量需要通过seesion初始化后，才能在session中使用。）
 sess.run(tf.initialize_all_variables())
 
-#循环训练
-for i in range(200):
-    batch=mnist.train.next_batch(50)
-    train_step.run(feed_dict={x:batch[0],y_:batch[1],keep_prob:0.5})
+# #循环训练
+# for i in range(200):
+#     batch=mnist.train.next_batch(50)
+#     train_step.run(feed_dict={x:batch[0],y_:batch[1],keep_prob:0.5})
 
 
 #评估模型
@@ -112,10 +112,12 @@ correct_prediction =tf.equal(tf.argmax(y_conv,1),tf.argmax(y_,1))
 accuracy =tf.reduce_mean(tf.cast(correct_prediction,tf.float32))
 
 #print(accuracy.eval(feed_dict={x: mnist.test.images,y_:mnist.test.labels}))
-
-print(
-    sess.run(accuracy, feed_dict={x:mnist.test.images,y_:mnist.test.labels,keep_prob:1.0})
-)
+#
+# print(
+#     sess.run(accuracy, feed_dict={x:mnist.test.images,y_:mnist.test.labels,keep_prob:1.0})
+# )
+if __name__ == '__main__':
+    print(mnist.test.images)
 
 
 

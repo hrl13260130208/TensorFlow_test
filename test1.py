@@ -1,42 +1,91 @@
-from tensorflow.examples.tutorials.mnist import input_data
-
-import  tensorflow as tf
+import logging
+import os
+import tensorflow as tf
 import numpy as np
+import time
+tf.enable_eager_execution()
+import tensorflow_datasets as tfds
 
-print("start")
-mnist = input_data.read_data_sets("mnist/", one_hot=True)
-print("go on")
+from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 
-X=tf.placeholder(tf.float32,[None,784])
-W=tf.Variable(tf.zeros([784,10]) )
-b=tf.Variable(tf.zeros([10]))
-y=tf.nn.softmax(tf.matmul(X,W)+b)
+def run(path):
+    time.sleep(10)
+    with open(path, "r", encoding="utf-8") as f:
+        text = ""
+        for i in f.readlines():
+            text += i + " "
 
-y_=tf.placeholder(tf.float32,[None,10])
-cross_entropy=tf.reduce_mean(-tf.reduce_sum(y_*tf.log(y),reduction_indices=[1]))
-train_step=tf.train.GradientDescentOptimizer(0.9).minimize(cross_entropy)
-sess=tf.InteractiveSession()
-#tf.global_variables_initializer().run()
-
-saver=tf.train.Saver()
-
-saver.restore(sess,"data/testdata.ckpt")
-for _ in range(200) :
-    batch_xs , batch_ys=mnist.train.next_batch(100)
-    sess.run(train_step, feed_dict={X: batch_xs, y_: batch_ys})
-
-saver_path=saver.save(sess,"data/testdata.ckpt")
-
-print("Model saved in file:",saver_path)
-correct_prediction =tf.equal(tf.argmax(y,1),tf.argmax(y_,1))
-accuracy=tf.reduce_mean(tf.cast(correct_prediction,"float"))
-
-print(
-    sess.run(accuracy, feed_dict={X:mnist.test.images,y_:mnist.test.labels})
-)
+        text_set = set(text.lower().split(" "))
+        return text_set
 
 
 
 
+def token_test():
+    string="Create a list of partitioned variables according to the given slicing."
+    f=open(r"C:\data\tmp2\ADA046646.txt","r",encoding="utf-8").read()
+    tokenizer = tfds.features.text.Tokenizer()
+
+    vocabulary_set = set()
+    list=[]
+    texts=[]
+    for file in os.listdir(r"C:\data\tmp2"):
+        f = open(r"C:/data/tmp2/"+file, "r", encoding="utf-8").read()
+        st=tokenizer.tokenize(f)
+        vocabulary_set.update(st)
+        list.append(st.__len__())
+        # print(st)
+
+    list=sorted(list)
+    print(list[int(list.__len__()/2)],list)
+    # print(vocabulary_set.__len__())
+    # encoder = tfds.features.text.TokenTextEncoder(vocabulary_set)
+    # list=encoder.encode(string)
+    # print(type(list))
+    # print(encoder.encode(st))
+    # print(vocabulary_set)
 
 
+
+
+if __name__ == '__main__':
+    token_test()
+    # x = [[1, 2, 3],
+    #      [1, 2, 3]]
+    #
+    # xx = tf.cast(x, tf.float32)
+    #
+    # mean_all = tf.reduce_mean(xx, keep_dims=False)
+    # mean_0 = tf.reduce_mean(xx, axis=0, keep_dims=False)
+    # mean_1 = tf.reduce_mean(xx, axis=1, keep_dims=False)
+    # print(mean_all,mean_0,mean_1)
+    # Nonparallel code
+    # data=[
+    #     r"C:\data\text_classification\result_subject\DE200615017155.txt",
+    #     r"C:\data\text_classification\result_subject\N8625307.txt",
+    #     r"C:\data\text_classification\result_subject\N140011168.txt",
+    #     r"C:\data\text_classification\result_subject\DE200615017183.txt",
+    #     r"C:\data\text_classification\result_subject\N150009463.txt"
+    #       ]
+    # s=time.time()
+    # results = map(run, data)
+    #
+    # for r in results:
+    #     print(r)
+    # e = time.time()
+    #
+    # print("时间：", e - s)
+    #
+    # s = time.time()
+    # # Parallel implementation
+    # with ProcessPoolExecutor() as pool:
+    # # with ThreadPoolExecutor(128) as pool:
+    #
+    #     results = pool.map(run, data)
+    #     for r in results:
+    #         print(r)
+    #
+    # e = time.time()
+    #
+    # print("时间：", e - s)
