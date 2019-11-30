@@ -6,7 +6,10 @@ import numpy as np
 import json
 import time
 from concurrent.futures import ProcessPoolExecutor,ThreadPoolExecutor
+import redis
 
+redis_ = redis.Redis(host="192.168.1.20", port=6379, db=3,decode_responses=True)
+VOCAB_SET="vocab_set"
 
 class Model():
 
@@ -56,7 +59,7 @@ class Model():
 
         model.summary()
         model.compile(optimizer='adam',
-                      loss='binary_crossentropy',
+                      loss='categorical_crossentropy',
                       metrics=['accuracy'])
         return model
 
@@ -89,39 +92,22 @@ class Model():
         with open(self.label_data_file_path,"r",encoding="utf-8") as f:
             lines=f.readlines()
             texts=open(self.feature_data_file_path,"r",encoding="utf-8").readlines()
+            result_list=[]
+
             for index,line in enumerate(lines):
-                if index<int(lines.__len__()/10*7) :
-                    self.write_tf_file(line,texts[index],train_data_writer,vocab2int_dict,subject2int_dict,subject_num)
+                # print(index)
+                if index>1000:
+                    break
+                if index%10>3 :
+                    write_tf_file(line,texts[index],train_data_writer,vocab2int_dict,subject2int_dict,subject_num)
                 else:
-                    self.write_tf_file(line,texts[index], val_data_writer, vocab2int_dict, subject2int_dict, subject_num)
+                    write_tf_file(line,texts[index], val_data_writer, vocab2int_dict, subject2int_dict, subject_num)
+
             # for line in lines[:int(lines.__len__()/10*7)]:
             #     self.write_tf_file(line,train_data_writer,vocab2int_dict,subject2int_dict,subject_num)
             # for line in lines[int(lines.__len__()/10*7):]:
             #     self.write_tf_file(line,val_data_writer,vocab2int_dict,subject2int_dict,subject_num)
 
-
-    def write_tf_file(self,line,text,writer,vocab2int_dict,subject2int_dict,subject_num):
-        line=line.replace("\n","")
-        items = text.lower().replace("\n"," ").split(" ")
-        int_list = []
-        for item in items:
-            int_list.append(int(vocab2int_dict[item]))
-
-        sint = subject2int_dict[line]
-        # print(int_list)
-        train_data = tf.keras.preprocessing.sequence.pad_sequences([int_list], padding='post', maxlen=51200)
-        # print(train_data.shape)
-        label_data = tf.keras.utils.to_categorical(np.array(sint), num_classes=subject_num)
-        print(sint,label_data)
-        features = tf.train.Features(
-            feature={
-                "input": tf.train.Feature(int64_list=tf.train.Int64List(value=train_data.flatten())),
-                "out": tf.train.Feature(float_list=tf.train.FloatList(value=label_data))
-            }
-        )
-        example = tf.train.Example(features=features)
-        serialized = example.SerializeToString()
-        writer.write(serialized)
 
     def get_dicts(self):
         print("解析字典文件...")
@@ -160,27 +146,31 @@ class Model():
                 #     text_set = set(text.lower().split(" "))
                 #     vocab_set = vocab_set | text_set
 
+            if redis_.keys(VOCAB_SET)==None:
+                print("词表为空！")
+                fd=open(self.feature_data_file_path,"w+",encoding="utf-8")
+                ld=open(self.label_data_file_path,"w+",encoding="utf-8")
 
-            fd=open(self.feature_data_file_path,"w+",encoding="utf-8")
-            ld=open(self.label_data_file_path,"w+",encoding="utf-8")
 
+                s = time.time()
 
-            s = time.time()
+                with ThreadPoolExecutor(128) as pool:
 
-            with ThreadPoolExecutor(128) as pool:
+                    results = pool.map(read_txt_to_set, path_list)
+                    # print(len(results))
+                    i=0
+                    for r in results:
+                        i+=1
+                        ld.write(r[0]+"\n")
+                        fd.write(r[1].lower()+"\n")
 
-                results = pool.map(read_txt_to_set, path_list)
-                # print(len(results))
-                i=0
-                for r in results:
-                    i+=1
-                    ld.write(r[0]+"\n")
-                    fd.write(r[1].lower()+"\n")
+                e = time.time()
 
-            e = time.time()
-
-            print("时间：", e - s)
-            vocab_set=sorted(set(open(self.feature_data_file_path,encoding="utf-8").read().replace("\n", " ").split(" ")))
+                print("时间：", e - s)
+            # with open(self.feature_data_file_path, encoding="utf-8") as f:
+            #     for line in f.readlines():
+            #         redis_.sadd(VOCAB_SET,line.replace("\n", " ").split(" "))
+            vocab_set=redis_.smembers(VOCAB_SET)
             subject2int_dict = {u: i for i, u in enumerate(subject_set)}
             int2subject_dict = {i: u for i, u in enumerate(subject_set)}
             vocab2int_dict = {u: i for i, u in enumerate(vocab_set)}
@@ -223,7 +213,7 @@ class Model():
             verbose=1,
             save_weights_only=True,
             period=5)
-        histry=model.fit(dataset, epochs=10, steps_per_epoch=30,callbacks=[cp_callback],validation_data=val_data,validation_steps=10)
+        histry=model.fit(dataset, epochs=10, steps_per_epoch=30)
 
 
     def predict(self,data):
@@ -289,37 +279,66 @@ def read_txt_to_set(item):
     with open(path, "r", encoding="utf-8") as f:
         text = ""
         for i in f.readlines():
-            text += i + " "
+            text += i.replace("\n","") + " "
+        for word in text.lower().split(" "):
+            redis_.sadd(VOCAB_SET,word)
         return (item[0],text.replace("\n"," "))
 
+def write_tf_file(line,text,writer,vocab2int_dict,subject2int_dict,subject_num):
+    print(line)
+    line=line.replace("\n","")
+    items = text.lower().replace("\n"," ").split(" ")
+    int_list = []
+    try:
+        for item in items:
+            int_list.append(int(vocab2int_dict[item]))
+    except:
+        print("处理出错！")
+        return
 
+    sint = subject2int_dict[line]
+    # print(int_list)
+    train_data = tf.keras.preprocessing.sequence.pad_sequences([int_list], padding='post', maxlen=51200)
+    # print(train_data.shape)
+    label_data = tf.keras.utils.to_categorical(np.array(sint), num_classes=subject_num)
+    print(sint,label_data)
+    features = tf.train.Features(
+        feature={
+            "input": tf.train.Feature(int64_list=tf.train.Int64List(value=train_data.flatten())),
+            "out": tf.train.Feature(float_list=tf.train.FloatList(value=label_data))
+        }
+    )
+    example = tf.train.Example(features=features)
+    serialized = example.SerializeToString()
+    writer.write(serialized)
 
 if __name__ == '__main__':
 
-    # m=Model(subject_file=r"C:\data\text_classification\temp_subject_file.txt",
-    #         result_subject_dir=r"C:\data\text_classification\result_subject",
-    #         file_dir=r"C:\data\text_classification")
-    # m.data_format()
-    s=time.time()
-    # list=[]
-    # with open(r"C:\data\text_classification\feature_file", encoding="utf-8") as f:
-    #     for line in f.readlines():
-    #         list.extend(line.replace("\n", " ").split(" "))
-    list=open(r"C:\data\text_classification\feature_file", encoding="utf-8").read()
-
-    tokenizer = tfds.features.text.Tokenizer()
-
-
-    st = tokenizer.tokenize(list)
-    vocabulary_set = set(st)
-    e = time.time()
-    print("时间：", e - s)
-    vocab_set = sorted(vocabulary_set)
-    dict().keys()
-    dict().values()
+    m=Model(subject_file=r"C:\data\text_classification\temp_subject_file.txt",
+            result_subject_dir=r"C:\data\text_classification\result_subject",
+            file_dir=r"C:\data\text_classification")
+    m.data_format()
+    m.train()
+    # s=time.time()
+    # # list=[]
+    # # with open(r"C:\data\text_classification\feature_file", encoding="utf-8") as f:
+    # #     for line in f.readlines():
+    # #         list.extend(line.replace("\n", " ").split(" "))
+    # list=open(r"C:\data\text_classification\feature_file", encoding="utf-8").read()
+    #
+    # tokenizer = tfds.features.text.Tokenizer()
+    #
+    #
+    # st = tokenizer.tokenize(list)
+    # vocabulary_set = set(st)
+    # e = time.time()
+    # print("时间：", e - s)
+    # vocab_set = sorted(vocabulary_set)
+    # dict().keys()
+    # dict().values()
 
     # m.get_dicts()
-    # m.train()
+
     # print(m.predict_text(r"C:\data\text_classification\result_subject\AD1011810.txt"))
     # print(m.predict_dir(r"C:\data\test\testdata"))
 
