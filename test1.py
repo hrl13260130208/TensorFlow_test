@@ -47,10 +47,32 @@ def token_test():
     # print(vocabulary_set)
 
 
+def select_data():
+    writer = open(r"C:\temp\subject_file_1000.txt", "w+", encoding="utf-8")
+    dir=r"C:\temp\classification"
+    temp={}
+    with open(r"C:\Users\zhaozhijie.CNPIEC\Desktop\new_temp_subject_file.txt",encoding="utf-8") as f:
+        for line in f.readlines():
+            item=line.split("##")
+            if item[0] in temp.keys():
+                temp[item[0]].append(line)
+            else:
+                temp[item[0]]=[line]
+        for i in range(1000):
+            for key in temp.keys():
+                if len(temp[key])>1000:
+                    writer.write(temp[key][i])
+            # writer1 = open(os.path.join(dir,key+".txt"), "w+", encoding="utf-8")
+            # for index,line in enumerate(temp[key]):
+            #     writer1.write(line)
+
+
+
 
 
 if __name__ == '__main__':
-    token_test()
+    select_data()
+    # token_test()
     # x = [[1, 2, 3],
     #      [1, 2, 3]]
     #

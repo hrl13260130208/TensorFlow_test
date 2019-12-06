@@ -176,8 +176,24 @@ def test():
     discriminator = make_discriminator_model()
     decision = discriminator(generated_image)
     print(decision)
+
+
+# def display_image(epoch_no):
+#     return PIL.Image.open('image_at_epoch_{:04d}.png'.format(epoch_no))
+
+
 if __name__ == '__main__':
-    train(dataset=train_dataset,epochs=EPOCHS)
+    # train(dataset=train_dataset,epochs=EPOCHS)
+    checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir))
+    noise = tf.random.normal([1, 100])
+    generated_image = generator(noise, training=False)
+    print(generated_image)
+    plt.imshow(generated_image[0, :, :, 0], cmap='gray')
+    pylab.show()
+    # display_image(EPOCHS)
+
+
+
 
 
 
