@@ -86,8 +86,8 @@ class Model():
         path_list = []
         f_subject = open(self.subject_file, "r", encoding="utf-8")
         for index, line in enumerate(f_subject.readlines()):
-            if index > 1000:
-                break
+            # if index > 1000:
+            #     break
             item = line.replace("\n", "").split("##")
             path_list.append((item[0], os.path.join(self.result_subject_dir, item[1] + ".txt")))
 
@@ -139,8 +139,8 @@ class Model():
             path_list = []
             print("读取subject文件...")
             for index,line in enumerate(f_subject.readlines()):
-                if index>1000:
-                    break
+                # if index>1000:
+                #     break
                 item = line.replace("\n", "").split("##")
                 subject_set.add(item[0])
                 path_list.append((item[0], os.path.join(self.result_subject_dir, item[1] + ".txt")))
@@ -187,11 +187,11 @@ class Model():
         train_data = dataset.skip(self.val_data_len)
         val_data = dataset.take(self.val_data_len)
 
-        train_data=train_data.batch(10)
-        val_data=val_data.batch(10)
+        train_data=train_data.batch(1)
+        val_data=val_data.batch(1)
 
         train_data = train_data.repeat()
-        
+
         latest = tf.train.latest_checkpoint(self.model_path)
         model = self.get_model()
         if latest != None:
@@ -214,7 +214,7 @@ class Model():
                                                      })
 
         data = tf.sparse_tensor_to_dense(features["input"], default_value=0)
-
+        # d=tf.split(data,10)
         out = tf.sparse_tensor_to_dense(features["out"], default_value=0)
         print(out.shape)
         return data,out
@@ -227,17 +227,33 @@ class Model():
         if self.vocab_encoder==None:
             self.load()
         # print(self.vocab_encoder.vocab_size)
-        model = tf.keras.Sequential([
-            tf.keras.layers.Embedding(self.vocab_encoder.vocab_size, 64),
-            tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(64)),
-            # tf.keras.layers.LSTM(1024),
-            # tf.keras.layers.GlobalAveragePooling1D(),
-            tf.keras.layers.Dense(64, activation='relu'),
-            tf.keras.layers.Dense(self.label_len, activation='softmax')
-        ])
+        # model = tf.keras.Sequential([
+        #     tf.keras.layers.Embedding(self.vocab_encoder.vocab_size, 64),
+        #     tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(64)),
+        #     # tf.keras.layers.LSTM(1024),
+        #     # tf.keras.layers.GlobalAveragePooling1D(),
+        #     tf.keras.layers.Dense(64, activation='relu'),
+        #     tf.keras.layers.Dense(self.label_len, activation='softmax')
+        # ])
 
+        # i=[]
+        # for index in range(10):
+        #     i.append(tf.keras.Input(shape=(1024)))
+        i=tf.keras.layers.Input(shape=10240)
+        e=tf.keras.layers.Embedding(self.vocab_encoder.vocab_size, 64)(i)
+        x=tf.keras.layers.Lambda(tf.split,arguments={"num_or_size_splits":10,"axis":1})(e)
+        print(len(x))
+        lstm=[]
+        for input in x :
+            # print(input.shape)
+            lstm.append(tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(64))(input))
+            # lstm.append(LSTMS(64,self.vocab_encoder.vocab_size)(input))
+        #
+        lstm_out=tf.keras.layers.Concatenate()(lstm)
+        d1=tf.keras.layers.Dense(1024, activation='relu')(lstm_out)
+        out=tf.keras.layers.Dense(self.label_len, activation='softmax')(d1)
 
-
+        model = tf.keras.Model(inputs=i, outputs=out)
         model.compile(loss='categorical_crossentropy',
                       optimizer=tf.keras.optimizers.Adam(0.001),
                       metrics=['accuracy'])
@@ -273,6 +289,14 @@ class Model():
     def predict_dir(self,dir):
         for f_name in os.listdir(dir):
             self.predict_file(os.path.join(dir,f_name))
+
+
+def LSTMS(units,vocab_size):
+    result = tf.keras.Sequential()
+    result.add(tf.keras.layers.Embedding(vocab_size, 64))
+
+    result.add(tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(units)))
+    return result
 
 
 def read_txt(item,all_lower=True):
@@ -311,15 +335,15 @@ def read_txt_to_set(item,use_redis=True,all_lower=True):
 #   return tf.py_function(read_text_map,inp=[text], Tout=(tf.string))
 if __name__ == '__main__':
 
-    m=Model(subject_file=r"C:\data\text_classification\temp_subject_file.txt",
-            result_subject_dir=r"C:\data\text_classification\result_subject",
-            file_dir=r"C:\data\1",val_data_len=100)
+    m=Model(subject_file=r"C:\data\tmp\t.txt",
+            result_subject_dir=r"C:\data\tmp3",
+            file_dir=r"C:\data\tcr_multi_input",val_data_len=100)
     # m=Model(subject_file=r"C:\data\text_classification\temp_subject_file.txt",
     #         result_subject_dir=r"C:\data\text_classification\result_subject",
     #         file_dir=r"C:\data\translate_rnn")
     # m.data_format()
     m.train()
-    # tf.keras.utils.plot_model(m.get_model(),to_file="text_classification_rnn.png", show_shapes=True)
+    # tf.keras.utils.plot_model(m.get_model(),to_file="tcr_multi_input.png", show_shapes=True)
     # print(encoder)
 
 
@@ -327,66 +351,40 @@ if __name__ == '__main__':
     #     print(key)
     #     redis_.delete(key)
 
-
-    # vocabulary_set = set()
-    # list = []
-    # texts = []
-    # for file in os.listdir(r"C:\data\tmp2"):
-    #     f = open(r"C:/data/tmp2/" + file, "r", encoding="utf-8").read()
-    #     texts.append(f)
-    #     st = tokenizer.tokenize(f)
-    #     # print(st)
-    #     vocabulary_set.update(st)
-    #     list.append(st.__len__())
+    # m.load_subject_dict()
     #
-    #
-    # encoder = tfds.features.text.TokenTextEncoder(vocabulary_set)
-    #
-    # datas=[]
+    # m.load_encoder()
     # labels=[]
-    # for index,t in enumerate(texts):
-    #     item=encoder.encode(t)
-    #     if len(item)<1000:
-    #         continue
-    #     # datas.append(item)
-    #     # labels.append(index%10)
-    #     train_data = tf.keras.preprocessing.sequence.pad_sequences([item], padding='post', maxlen=10240)
-    #     # print(train_data.shape)
-    #     label_data = tf.keras.utils.to_categorical(np.array(index%10), num_classes=10)
-    #     datas.append(train_data)
-    #     labels.append(label_data)
+    # features=[]
+    # for line in open(r"C:\data\tmp\t.txt","r",encoding="utf-8"):
+    #     item = line.replace("\n", "").split("##")
+    #     label = m.subject2int_dict[item[0]]
+    #     label = tf.keras.utils.to_categorical(np.array(label), num_classes=m.label_len)
+    #     print(label.shape, label)
+    #     text=open(os.path.join(r"C:\data\tmp3",item[1]+".txt"),"r",encoding="utf-8").read()
+    #     data_feature = m.vocab_encoder.encode(text)
+    #     data_feature = tf.keras.preprocessing.sequence.pad_sequences([data_feature], padding='post',
+    #                                                                  maxlen=m.text_maxlen)
     #
-    # train_datas=np.array(datas).reshape(113,10240)
-    # label_datas=np.array(labels)
+    #     features.append(data_feature)
+    #     labels.append(label)
     #
-    # print(train_datas.shape,encoder.vocab_size)
-    # model = tf.keras.Sequential([
-    #     tf.keras.layers.Embedding(encoder.vocab_size, 64),
-    #     tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(64)),
-    #     tf.keras.layers.Dense(1024, activation='relu'),
-    #     tf.keras.layers.Dense(10, activation='softmax')
-    # ])
-    #
-    #
-    #
-    # model.compile(loss='categorical_crossentropy',
-    #               optimizer=tf.keras.optimizers.Adam(0.001),
-    #               metrics=['accuracy'])
-    #
-    # history = model.fit(train_datas,label_datas, epochs=10,batch_size=10)
-#
-# model.save(r"C:\data\test\a")
-# # model.load_weights(r"C:\data\test\a")
-# p=model.predict(train_datas)
-# t=0
-# for i,l in enumerate(p):
-#     print("-------",np.argmax(l))
-#     print("++++++++",np.argmax(label_datas[i]))
-#     print("=======",np.argmax(l)==np.argmax(label_datas[i]))
-#     if np.argmax(l)==np.argmax(label_datas[i]):
-#         t+=1
-#
-# print(t,t/len(p))
+    # model=m.get_model()
+    # features=np.array(features).reshape((3000,10240))
+    # # features=np.split(features, 10, axis=1)
+    # labels=np.array(labels)
+    # # print(f.__len__(),f[0].shape,labels.shape)
+    # model.fit(features,labels,batch_size=1,epochs=10)
+    # tf.split(a,num_or_size_splits=10,axis=1)
+    # m.get_model()
+    # tf.keras.utils.plot_model(m.get_model(), to_file="tcr_multi_input.png", show_shapes=True)
+
+
+
+
+
+
+
 
 
 

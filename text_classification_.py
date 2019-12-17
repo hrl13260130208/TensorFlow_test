@@ -8,8 +8,7 @@ import time
 from concurrent.futures import ProcessPoolExecutor,ThreadPoolExecutor
 import redis
 
-# redis_ = redis.Redis(host="192.168.1.20", port=6379, db=3,decode_responses=True)
-redis_ = redis.Redis(host="localhost", port=6379, db=11,decode_responses=True)
+redis_ = redis.Redis(host="192.168.1.20", port=6379, db=3,decode_responses=True)
 VOCAB_SET="vocab_set"
 
 class Model():
@@ -51,27 +50,12 @@ class Model():
     def get_model(self):
         len=self.get_vocb_lenth()
         onehot_num=self.get_subject_lenth()
-        # model = tf.keras.Sequential()
-        #
-        # model.add(tf.keras.layers.Embedding(len, 50))
-        # # model.add(tf.keras.layers.Conv1D(1024,(4)))
-        # # model.add(tf.keras.layers.GlobalAveragePooling1D())
-        # model.add(tf.keras.layers.Reshape((50*51200,)))
-        #
-        # model.add(tf.keras.layers.Dense(2560, activation='relu'))
-        # model.add(tf.keras.layers.Dense(onehot_num, activation='softmax'))
-        lstm_input = tf.keras.Input(shape=(51200))
-        e=tf.keras.layers.Embedding(len, 50)(lstm_input)
-        zp=tf.keras.layers.ZeroPadding1D(2)(e)
-        c=tf.keras.layers.Conv1D(50, (5),strides=4)(zp)
-        zp2=tf.keras.layers.ZeroPadding1D(2)(c)
-        c2=tf.keras.layers.Conv1D(50, (5),strides=4)(zp2)
-        zp3 = tf.keras.layers.ZeroPadding1D(2)(c2)
-        c3 = tf.keras.layers.Conv1D(50, (5), strides=4)(zp3)
-        r=tf.keras.layers.Reshape((50 * 800,))(c3)
-        d1=tf.keras.layers.Dense(2560, activation='relu')(r)
-        d2=tf.keras.layers.Dense(onehot_num, activation='softmax')(d1)
-        model = tf.keras.Model(inputs=lstm_input, outputs=d2)
+        model = tf.keras.Sequential()
+
+        model.add(tf.keras.layers.Embedding(len, 50))
+        model.add(tf.keras.layers.GlobalAveragePooling1D())
+        model.add(tf.keras.layers.Dense(2560, activation='relu'))
+        model.add(tf.keras.layers.Dense(onehot_num, activation='softmax'))
 
         model.summary()
         model.compile(optimizer='adam',
@@ -109,18 +93,21 @@ class Model():
             lines=f.readlines()
             texts=open(self.feature_data_file_path,"r",encoding="utf-8").readlines()
             result_list=[]
-           
+
             for index,line in enumerate(lines):
-                    # print(index)
-                if index<int(lines.__len__()/10*7) :
+                # print(index)
+                if index>1000:
+                    break
+                if index%10>3 :
                     write_tf_file(line,texts[index],train_data_writer,vocab2int_dict,subject2int_dict,subject_num)
                 else:
                     write_tf_file(line,texts[index], val_data_writer, vocab2int_dict, subject2int_dict, subject_num)
-                    
+
             # for line in lines[:int(lines.__len__()/10*7)]:
             #     self.write_tf_file(line,train_data_writer,vocab2int_dict,subject2int_dict,subject_num)
             # for line in lines[int(lines.__len__()/10*7):]:
             #     self.write_tf_file(line,val_data_writer,vocab2int_dict,subject2int_dict,subject_num)
+
 
     def get_dicts(self):
         print("解析字典文件...")
@@ -159,26 +146,27 @@ class Model():
                 #     text_set = set(text.lower().split(" "))
                 #     vocab_set = vocab_set | text_set
 
-            
-            fd=open(self.feature_data_file_path,"w+",encoding="utf-8")
-            ld=open(self.label_data_file_path,"w+",encoding="utf-8")
+            if redis_.keys(VOCAB_SET)==None:
+                print("词表为空！")
+                fd=open(self.feature_data_file_path,"w+",encoding="utf-8")
+                ld=open(self.label_data_file_path,"w+",encoding="utf-8")
 
 
-            s = time.time()
+                s = time.time()
 
-            with ThreadPoolExecutor(128) as pool:
+                with ThreadPoolExecutor(128) as pool:
 
-                results = pool.map(read_txt_to_set, path_list)
+                    results = pool.map(read_txt_to_set, path_list)
                     # print(len(results))
-                i=0
-                for r in results:
-                    i+=1
-                    ld.write(r[0]+"\n")
-                    fd.write(r[1].lower()+"\n")
+                    i=0
+                    for r in results:
+                        i+=1
+                        ld.write(r[0]+"\n")
+                        fd.write(r[1].lower()+"\n")
 
-            e = time.time()
+                e = time.time()
 
-            print("时间：", e - s)
+                print("时间：", e - s)
             # with open(self.feature_data_file_path, encoding="utf-8") as f:
             #     for line in f.readlines():
             #         redis_.sadd(VOCAB_SET,line.replace("\n", " ").split(" "))
@@ -201,12 +189,12 @@ class Model():
 
         dataset = tf.data.TFRecordDataset(self.train_data_file_path)
         dataset = dataset.map(read_tfrecord_map)
-        dataset = dataset.batch(10)
+        dataset = dataset.batch(100)
         dataset = dataset.repeat()
 
         val_data=tf.data.TFRecordDataset(self.val_data_file_path)
         val_data=val_data.map(read_tfrecord_map)
-        val_data=val_data.batch(10)
+        val_data=val_data.batch(100)
         val_data=val_data.repeat()
         # for data in dataset.take(1):
         #     print("----------------",data)
@@ -225,18 +213,7 @@ class Model():
             verbose=1,
             save_weights_only=True,
             period=5)
-        histry=model.fit(dataset, epochs=1000, steps_per_epoch=350,callbacks=[cp_callback],validation_data=val_data,validation_steps=10)
-
-
-    def evl(self,path):
-        val_data = tf.data.TFRecordDataset(path)
-        val_data = val_data.map(read_tfrecord_map)
-        val_data = val_data.batch(100)
-
-        latest = tf.train.latest_checkpoint(self.model_path)
-        model = self.get_model()
-        model.load_weights(latest)
-        model.evaluate(val_data)
+        histry=model.fit(dataset, epochs=10, steps_per_epoch=30)
 
 
     def predict(self,data):
@@ -298,7 +275,7 @@ def read_tfrecord_map(line):
 
 def read_txt_to_set(item):
     path=item[1]
-    print("读取文件:",path)
+    print(path)
     with open(path, "r", encoding="utf-8") as f:
         text = ""
         for i in f.readlines():
@@ -337,19 +314,11 @@ def write_tf_file(line,text,writer,vocab2int_dict,subject2int_dict,subject_num):
 
 if __name__ == '__main__':
 
-    m=Model(subject_file=r"C:\data\tmp\t.txt",
-            result_subject_dir=r"C:\data\tmp3",
-            file_dir=r"C:\data\tmp")
-    # m=Model(subject_file=r"Z:\Backup\FTP_PDF\Report\subject_file_1000.txt",
-    #         result_subject_dir=r"Z:\Backup\FTP_PDF\Report\tmp3",
-    #         file_dir=r"C:\data\text_classification")
-    # m.data_format()
-    # m.train()
-    tf.keras.utils.plot_model(m.get_model(),to_file="text_classification.png",show_shapes=True)
-    # m.evl(r"")
-    #print(redis_.delete(VOCAB_SET))
-    # for key in redis_.keys("*"):
-    #     print(key)
+    m=Model(subject_file=r"C:\data\text_classification\temp_subject_file.txt",
+            result_subject_dir=r"C:\data\text_classification\result_subject",
+            file_dir=r"C:\data\text_classification")
+    m.data_format()
+    m.train()
     # s=time.time()
     # # list=[]
     # # with open(r"C:\data\text_classification\feature_file", encoding="utf-8") as f:
@@ -369,7 +338,7 @@ if __name__ == '__main__':
     # dict().values()
 
     # m.get_dicts()
-   
+
     # print(m.predict_text(r"C:\data\text_classification\result_subject\AD1011810.txt"))
     # print(m.predict_dir(r"C:\data\test\testdata"))
 

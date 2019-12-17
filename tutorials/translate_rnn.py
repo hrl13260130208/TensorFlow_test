@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 import tensorflow as tf
+tf.enable_eager_execution()
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
@@ -265,7 +266,7 @@ if __name__ == '__main__':
         total_loss = 0
 
         for (batch, (inp, targ)) in enumerate(dataset.take(steps_per_epoch)):
-            print(inp,targ)
+            # print(inp,targ)
             batch_loss = train_step(inp, targ, enc_hidden)
             total_loss += batch_loss
 

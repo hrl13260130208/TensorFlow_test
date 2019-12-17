@@ -353,18 +353,18 @@ if __name__ == '__main__':
     # pylab.show()
     # plt.show()
 
-    train_dataset = tf.data.Dataset.list_files(PATH + 'train/*.jpg')
-    train_dataset = train_dataset.map(load_image_train,
-                                      num_parallel_calls=tf.data.experimental.AUTOTUNE)
-    train_dataset = train_dataset.shuffle(BUFFER_SIZE)
-    train_dataset = train_dataset.batch(BATCH_SIZE)
+    # train_dataset = tf.data.Dataset.list_files(PATH + 'train/*.jpg')
+    # train_dataset = train_dataset.map(load_image_train,
+    #                                   num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    # train_dataset = train_dataset.shuffle(BUFFER_SIZE)
+    # train_dataset = train_dataset.batch(BATCH_SIZE)
+    #
+    # test_dataset = tf.data.Dataset.list_files(PATH + 'test/*.jpg')
+    # test_dataset = test_dataset.map(load_image_test)
+    # test_dataset = test_dataset.batch(BATCH_SIZE)
 
-    test_dataset = tf.data.Dataset.list_files(PATH + 'test/*.jpg')
-    test_dataset = test_dataset.map(load_image_test)
-    test_dataset = test_dataset.batch(BATCH_SIZE)
+    # fit(train_dataset,140,test_dataset)
 
-    fit(train_dataset,140,test_dataset)
-
-
+    tf.keras.utils.plot_model(generator,to_file=".", show_shapes=True)
 
     # checkpoint.restore()

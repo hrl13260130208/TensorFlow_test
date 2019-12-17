@@ -71,7 +71,8 @@ def select_data():
 
 
 if __name__ == '__main__':
-    select_data()
+    # select_data()
+    import pydot
     # token_test()
     # x = [[1, 2, 3],
     #      [1, 2, 3]]
